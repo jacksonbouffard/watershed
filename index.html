@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WaterShed</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+:root{
+  --bg:#060b14;--sf:#0d1320;--s2:#151e2e;--s3:#1c2740;--bd:#243049;
+  --tx:#dfe6f0;--dm:#6b7fa0;--ac:#38bdf8;--acd:rgba(56,189,248,.12);
+  --ok:#34d399;--okd:rgba(52,211,153,.15);--no:#ef4444;--nod:rgba(239,68,68,.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--tx);height:100vh;overflow:hidden}
+
+/* HEADER */
+.hd{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid var(--bd);background:var(--sf);z-index:900;position:relative}
+.lg{display:flex;align-items:center;gap:10px}
+.lg svg{width:26px;height:26px}
+.lt{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}.lt span{color:var(--ac)}
+.hr{display:flex;align-items:center;gap:14px}
+.pl{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--dm);background:var(--s2);padding:5px 10px;border-radius:6px;border:1px solid var(--bd)}.pl b{color:var(--ac)}
+.ib{background:0;border:0;color:var(--dm);cursor:pointer;padding:4px;display:flex;align-items:center}.ib:hover{color:var(--tx)}
+
+/* LAYOUT */
+.wr{display:grid;grid-template-columns:1fr 360px;height:calc(100vh - 52px)}
+@media(max-width:860px){.wr{grid-template-columns:1fr;grid-template-rows:1fr auto}.sb{max-height:48vh;border-left:none!important;border-top:1px solid var(--bd)}}
+
+/* MAP */
+.mc{position:relative}
+#map{width:100%;height:100%;background:var(--bg)}
+.leaflet-container{background:var(--bg)!important}
+.leaflet-control-zoom a{background:var(--sf)!important;color:var(--tx)!important;border-color:var(--bd)!important;width:30px!important;height:30px!important;line-height:30px!important;font-size:16px!important}
+.leaflet-control-zoom a:hover{background:var(--s2)!important}
+.leaflet-control-attribution{display:none!important}
+
+/* LAYER PROGRESS */
+.lp{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;display:flex;align-items:center;gap:8px;background:var(--sf);padding:8px 16px;border-radius:10px;border:1px solid var(--bd);box-shadow:0 4px 24px rgba(0,0,0,.5)}
+.ld{width:12px;height:12px;border-radius:50%;background:var(--s2);border:2px solid var(--bd);transition:all .4s}
+.ld.on{border-color:transparent;transform:scale(1.15)}
+.ld.on:nth-child(1){background:#38bdf8;box-shadow:0 0 8px #38bdf8}
+.ld.on:nth-child(2){background:#818cf8;box-shadow:0 0 8px #818cf8}
+.ld.on:nth-child(3){background:#a78bfa;box-shadow:0 0 8px #a78bfa}
+.ld.on:nth-child(4){background:#f472b6;box-shadow:0 0 8px #f472b6}
+.ld.on:nth-child(5){background:#fb923c;box-shadow:0 0 8px #fb923c}
+.ld.on:nth-child(6){background:#34d399;box-shadow:0 0 8px #34d399}
+.ll{font-size:.68rem;color:var(--dm);font-weight:500;margin-left:4px;white-space:nowrap}
+
+/* FLASH */
+.fl{position:absolute;inset:0;z-index:700;pointer-events:none;opacity:0;transition:opacity .15s}
+.fl.no{background:var(--no);opacity:.12}.fl.ok{background:var(--ok);opacity:.15}
+.fl.fo{opacity:0;transition:opacity .6s}
+
+/* LOADING */
+.lo{position:absolute;inset:0;z-index:850;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s}
+.lo.h{opacity:0;pointer-events:none}
+.sp{width:36px;height:36px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.lot{color:var(--dm);font-size:.85rem}
+
+/* SIDEBAR */
+.sb{background:var(--sf);border-left:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+.st{padding:18px 20px 14px;border-bottom:1px solid var(--bd)}
+.sr{font-family:'DM Mono',monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dm);margin-bottom:4px}
+.sp2{font-size:1rem;font-weight:600;line-height:1.3}
+
+/* GUESS INPUT */
+.ga{padding:14px 20px;border-bottom:1px solid var(--bd)}
+.gw{position:relative;display:flex;gap:8px}
+.gi{flex:1;background:var(--s2);border:2px solid var(--bd);color:var(--tx);padding:10px 14px;border-radius:8px;font-family:'Outfit',sans-serif;font-size:.9rem;outline:0;transition:border-color .2s,box-shadow .2s}
+.gi:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--acd)}
+.gi::placeholder{color:var(--dm)}.gi:disabled{opacity:.4;cursor:not-allowed}
+.gi.iw{border-color:var(--no);box-shadow:0 0 0 3px var(--nod);animation:shake .4s}
+.gi.io{border-color:var(--ok);box-shadow:0 0 0 3px var(--okd)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.gb{background:var(--ac);color:#060b14;border:0;padding:10px 18px;border-radius:8px;font-family:inherit;font-weight:600;font-size:.85rem;cursor:pointer;transition:all .15s;white-space:nowrap}
+.gb:hover{filter:brightness(1.1);transform:translateY(-1px)}.gb:active{transform:translateY(0)}
+.gb:disabled{opacity:.3;cursor:not-allowed;transform:none}
+
+/* AUTOCOMPLETE */
+.dd{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;max-height:220px;overflow-y:auto;z-index:999;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.dd.open{display:block}
+.di{padding:10px 14px;font-size:.85rem;cursor:pointer;color:var(--tx);transition:background .1s;display:flex;justify-content:space-between;align-items:center}
+.di:first-child{border-radius:8px 8px 0 0}.di:last-child{border-radius:0 0 8px 8px}
+.di:hover,.di.hl{background:var(--s3)}
+.dh{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dm)}
+
+/* LAYER LEGEND */
+.leg{padding:14px 20px;border-bottom:1px solid var(--bd)}
+.legt{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dm);margin-bottom:8px;font-weight:500}
+.legi{display:flex;flex-direction:column;gap:4px}
+.le{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--dm);transition:color .3s}
+.le.on{color:var(--tx)}
+.les{width:8px;height:8px;border-radius:50%;background:var(--s2);border:1.5px solid var(--bd);transition:all .3s}
+.le.on .les{border-color:transparent}
+.le:nth-child(1).on .les{background:#38bdf8}
+.le:nth-child(2).on .les{background:#818cf8}
+.le:nth-child(3).on .les{background:#a78bfa}
+.le:nth-child(4).on .les{background:#f472b6}
+.le:nth-child(5).on .les{background:#fb923c}
+.le:nth-child(6).on .les{background:#34d399}
+
+/* GUESS HISTORY */
+.gh{flex:1;overflow-y:auto;padding:10px 20px}
+.ge{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:8px;font-size:.85rem;animation:si .3s ease}
+@keyframes si{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.gn{background:var(--nod);border:1px solid rgba(239,68,68,.2)}
+.go{background:var(--okd);border:1px solid rgba(52,211,153,.25)}
+.gnum{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dm);width:18px;text-align:center}
+.gname{flex:1}
+.gn .gname{color:#fca5a5}.go .gname{color:#6ee7b7;font-weight:600}
+.gico{font-size:1.1rem}
+
+/* RESULT */
+.rp{display:none;padding:24px 20px;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.rp.show{display:flex}
+.re{font-size:2.5rem;animation:pop .4s}
+@keyframes pop{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+.rt{font-size:1.2rem;font-weight:700}
+.ra{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--ac);background:var(--acd);padding:6px 14px;border-radius:6px}
+.rs{font-size:.85rem;color:var(--dm)}.rs b{color:var(--tx)}
+.rds{display:flex;gap:5px;margin:4px 0}
+.rd{width:16px;height:16px;border-radius:3px}
+.rd.e{background:var(--s2);border:1px solid var(--bd)}.rd.w{background:var(--no)}.rd.c{background:var(--ok)}
+.shb{background:var(--s2);color:var(--tx);border:1px solid var(--bd);padding:10px 28px;border-radius:8px;font-family:inherit;font-weight:600;font-size:.85rem;cursor:pointer;transition:all .15s;margin-top:4px}
+.shb:hover{background:var(--s3);border-color:var(--ac)}.shb.cp{border-color:var(--ok);color:var(--ok)}
+.rbtn{background:var(--s2);color:var(--dm);border:1px solid var(--bd);padding:5px 12px;border-radius:6px;font-family:'DM Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s}
+.rbtn:hover{background:var(--s3);border-color:var(--ac);color:var(--tx)}
+
+/* MODAL */
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.mbg.open{display:flex}
+.mod{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:28px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto}
+.mod h2{font-size:1.1rem;margin-bottom:14px;font-weight:700}
+.mod p{font-size:.85rem;color:var(--dm);line-height:1.6;margin-bottom:10px}
+.ml{list-style:none;padding:0;margin:10px 0 16px}
+.ml li{font-size:.82rem;padding:5px 0;color:var(--dm);display:flex;align-items:center;gap:8px}
+.ml .n{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dm);background:var(--s2);min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px}
+.mcl{background:var(--ac);color:#060b14;border:0;padding:10px 28px;border-radius:8px;font-family:inherit;font-weight:600;cursor:pointer;margin-top:10px;width:100%;font-size:.9rem}
+.mcl:hover{filter:brightness(1.1)}
+/* LANDUSE TOGGLE */
+.lu-toggle{position:absolute;bottom:18px;left:18px;z-index:800;display:none;align-items:center;gap:10px;background:var(--sf);padding:12px 20px;border-radius:10px;border:1px solid var(--bd);box-shadow:0 6px 24px rgba(0,0,0,.5);cursor:pointer;transition:all .15s;font-size:.92rem;color:var(--dm);font-family:'Outfit',sans-serif;user-select:none;font-weight:500}
+.lu-toggle:hover{background:var(--s2);border-color:var(--ac);color:var(--tx)}
+.lu-toggle.active{border-color:var(--ac);color:var(--tx)}
+.lu-toggle .lu-sw{width:40px;height:22px;border-radius:11px;background:var(--s2);border:1.5px solid var(--bd);position:relative;transition:all .2s}
+.lu-toggle.active .lu-sw{background:var(--acd);border-color:var(--ac)}
+.lu-toggle .lu-sw::after{content:'';position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:var(--dm);transition:all .2s}
+.lu-toggle.active .lu-sw::after{left:21px;background:var(--ac)}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="lg">
+    <svg viewBox="0 0 32 32" fill="none"><path d="M16 2C10 2 4 8 4 16c0 6 8 14 12 14s12-8 12-14C28 8 22 2 16 2z" fill="none" stroke="#38bdf8" stroke-width="1.8"/><path d="M8 12c2 3 5 4 8 4s6-1 8-4" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" opacity=".6"/><path d="M10 18c1.5 2 3.5 3 6 3s4.5-1 6-3" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" opacity=".4"/><circle cx="16" cy="8" r="2" fill="#38bdf8" opacity=".8"/></svg>
+    <div class="lt">Water<span>Shed</span></div>
+  </div>
+  <div class="hr">
+    <button class="rbtn" id="pmB">🎯 Practice Mode</button>
+    <button class="rbtn" id="rpB">� Daily Puzzle</button>
+    <div class="pl">🔥 <b id="sN">0</b></div>
+    <button class="ib" id="hB"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+  </div>
+</header>
+
+<div class="wr">
+  <div class="mc">
+    <div class="lp"><div class="ld on" id="d0"></div><div class="ld" id="d1"></div><div class="ld" id="d2"></div><div class="ld" id="d3"></div><div class="ld" id="d4"></div><div class="ld" id="d5"></div><span class="ll" id="dL">Boundary</span></div>
+    <div class="fl" id="fl"></div>
+    <div class="lu-toggle" id="luToggle"><div class="lu-sw"></div><span>Land use</span></div>
+    <div id="map"></div>
+    <div class="lo" id="lo"><div class="sp"></div><div class="lot" id="loT">Loading...</div></div>
+  </div>
+  <div class="sb">
+    <div class="st"><div class="sr" id="sr0">DAILY PUZZLE</div><div class="sp2">Name this watershed</div></div>
+    <div class="leg"><div class="legt">Revealed Layers</div><div class="legi">
+      <div class="le on" id="l0"><div class="les"></div>Boundary outline</div>
+      <div class="le" id="l1"><div class="les"></div>Mainstem river</div>
+      <div class="le" id="l2"><div class="les"></div>Tributaries</div>
+      <div class="le" id="l3"><div class="les"></div>Land use</div>
+      <div class="le" id="l4"><div class="les"></div>Satellite imagery</div>
+      <div class="le" id="l5"><div class="les"></div>Surrounding watersheds &amp; states</div>
+    </div></div>
+    <div class="ga" id="gA"><div class="gw">
+      <input type="text" class="gi" id="gI" placeholder="Type a watershed name..." autocomplete="off"/>
+      <button class="gb" id="gB">Guess</button>
+      <div class="dd" id="dd"></div>
+    </div></div>
+    <div class="gh" id="gH"></div>
+    <div class="rp" id="rP">
+      <div class="re" id="rE"></div><div class="rt" id="rT"></div>
+      <div class="ra" id="rA"></div><div class="rds" id="rD"></div>
+      <div class="rs" id="rS"></div>
+      <button class="shb" id="shB">📋 Share result</button>
+    </div>
+  </div>
+</div>
+
+<div class="mbg" id="mbg"><div class="mod">
+  <h2>How to Play</h2>
+  <p>You're looking at a HUC-6 watershed basin, shown as just an outline. Can you name it?</p>
+  <p>Each wrong guess reveals a new data layer:</p>
+  <ul class="ml">
+    <li><span class="n">1</span> Boundary outline</li>
+    <li><span class="n">2</span> Mainstem river</li>
+    <li><span class="n">3</span> Tributaries</li>
+    <li><span class="n">4</span> Land use (NLCD)</li>
+    <li><span class="n">5</span> Satellite imagery</li>
+    <li><span class="n">6</span> Surrounding watersheds &amp; states</li>
+  </ul>
+  <p>Fewer layers = higher score. Everyone gets the same watershed each day.</p>
+  <p style="color:var(--tx);font-weight:500">Scoring: 6 pts (layer 1) → 1 pt (layer 6) → 0 (fail)</p>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;font-size:.82rem;color:var(--dm)"><input type="checkbox" id="htpHide" style="accent-color:var(--ac);width:16px;height:16px;cursor:pointer"> Don’t show this again</label>
+  <button class="mcl" id="mC">Got it</button>
+</div></div>
+
+<script>
+/* ═══════ CONFIG ═══════ */
+// WBD Layer 3 = HUC6 (6-digit basins)
+const WBD = 'https://hydro.nationalmap.gov/arcgis/rest/services/wbd/MapServer/3/query';
+// State boundaries (TIGERweb)
+const STT = 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0/query';
+
+const LNAMES = ['Boundary','Mainstem','Tributaries','Land use','Satellite','Surroundings'];
+const H4 = ['0205','0206','0207','0208']; // Chesapeake HUC-4 codes
+
+/* ═══════ STATE ═══════ */
+let all = [], tgt = null, ly = 0, gs = [], done = false;
+let map, lBd, lMs, lTr, lSa, lCo, lLu;
+let cMain = null, cTribs = null, cStt = null, cNbr = null;
+let mainSize = 0, tribSize = 0;
+let practiceMode = false;
+let steps = [0,1,2,3,4,5]; // dynamic — coastal watersheds skip river layers
+let bgLoad = null; // background loading promise for neighbors + states
+
+/* ═══════ UTIL ═══════ */
+const $ = id => document.getElementById(id);
+const td = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const hsh = s => { let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0} return Math.abs(h) };
+const pick = n => hsh('wsg6-' + td()) % n;
+
+async function qry(url, p) {
+  const r = await fetch(url + '?' + new URLSearchParams(p));
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function getBounds(geo) {
+  let s=90, n=-90, w=180, e=-180;
+  const walk = c => { if(typeof c[0]==='number'){w=Math.min(w,c[0]);e=Math.max(e,c[0]);s=Math.min(s,c[1]);n=Math.max(n,c[1])} else c.forEach(walk) };
+  walk(geo.coordinates);
+  const py=(n-s)*.12, px=(e-w)*.12;
+  return { south:s-py, north:n+py, west:w-px, east:e+px, ct:[(s+n)/2,(w+e)/2] };
+}
+
+/* Ray-casting point-in-polygon — kept for future use */
+
+/* ═══════ DATA LOADING ═══════ */
+
+async function loadWatersheds() {
+  const where = H4.map(h => `huc6 LIKE '${h}%'`).join(' OR ');
+  const data = await qry(WBD, {
+    where, outFields: 'huc6,name', returnGeometry: 'false',
+    f: 'geojson'
+  });
+  return data.features.map(f => ({
+    huc: f.properties.huc6, name: f.properties.name
+  }));
+}
+
+/* Fetch geometry for a single watershed */
+async function loadTargetGeometry(huc) {
+  const data = await qry(WBD, {
+    where: `huc6='${huc}'`, outFields: 'huc6,name', returnGeometry: 'true',
+    outSR: '4326', f: 'geojson', geometryPrecision: '5'
+  });
+  const f = data.features[0];
+  return { geometry: f.geometry, bounds: getBounds(f.geometry) };
+}
+
+/* Fetch nearby watersheds by bounding box (for surroundings layer) */
+async function loadNearbyWatersheds(bounds) {
+  const pad = 0.5;
+  const bbox = `${bounds.west-pad},${bounds.south-pad},${bounds.east+pad},${bounds.north+pad}`;
+  const data = await qry(WBD, {
+    where: '1=1', geometry: bbox,
+    geometryType: 'esriGeometryEnvelope',
+    spatialRel: 'esriSpatialRelIntersects',
+    inSR: '4326', outSR: '4326',
+    outFields: 'huc6,name', returnGeometry: 'true',
+    f: 'geojson', geometryPrecision: '4', resultRecordCount: '50'
+  });
+  return data.features.map(f => ({
+    huc: f.properties.huc6, name: f.properties.name,
+    geometry: f.geometry, bounds: getBounds(f.geometry)
+  }));
+}
+
+/* Extract core river name from watershed name (strip directional prefixes) */
+function coreRiverName(wsName) {
+  return wsName.replace(/^(Upper|Lower|Middle|North|South|East|West)\s+/i, '').trim();
+}
+
+/* Load mainstem GeoJSON from local data */
+async function loadMainstem(huc) {
+  const r = await fetch(`data/mainstem/${huc}_mainstem.geojson`);
+  if (!r.ok) { console.warn(`No mainstem file for ${huc}`); return { type:'FeatureCollection', features:[] }; }
+  const blob = await r.blob();
+  mainSize = blob.size;
+  return JSON.parse(await blob.text());
+}
+
+/* Load tributary GeoJSON from local data */
+async function loadTribs(huc) {
+  const r = await fetch(`data/mainstem/${huc}_tribs.geojson`);
+  if (!r.ok) { console.warn(`No tribs file for ${huc}`); return { type:'FeatureCollection', features:[] }; }
+  const blob = await r.blob();
+  tribSize = blob.size;
+  return JSON.parse(await blob.text());
+}
+
+async function loadStates(bounds) {
+  const bbox = `${bounds.west-1},${bounds.south-1},${bounds.east+1},${bounds.north+1}`;
+  const data = await qry(STT, {
+    where: '1=1', geometry: bbox,
+    geometryType: 'esriGeometryEnvelope',
+    spatialRel: 'esriSpatialRelIntersects',
+    inSR: '4326', outSR: '4326',
+    outFields: 'NAME,STUSAB',
+    returnGeometry: 'true', f: 'geojson',
+    geometryPrecision: '4', resultRecordCount: '60'
+  });
+  return data;
+}
+
+/* ═══════ MAP SETUP ═══════ */
+
+function initMap() {
+  map = L.map('map', { zoomControl:true, attributionControl:false, zoomSnap:.25 }).setView([39,-77.5],7);
+}
+
+function fitTarget() {
+  const b = tgt.bounds;
+  map.fitBounds([[b.south,b.west],[b.north,b.east]], {padding:[30,30]});
+}
+
+function bringFront() { if(lBd) lBd.bringToFront(); if(lTr) lTr.bringToFront(); if(lMs) lMs.bringToFront(); }
+
+/* ═══════ LAYER RENDERS ═══════ */
+
+function rBoundary() {
+  lBd = L.geoJSON(tgt.geometry, {
+    style: { color:'#38bdf8', weight:2.5, fillColor:'transparent', fillOpacity:0, opacity:.9 }
+  }).addTo(map);
+  fitTarget();
+}
+
+function rMainstem() {
+  if (!cMain || !cMain.features.length) return;
+  lMs = L.geoJSON(cMain, {
+    style: { color: '#e0f2fe', weight: 3, opacity: .9 }
+  }).addTo(map);
+}
+
+function rTribs() {
+  if (!cTribs || !cTribs.features.length) return;
+  lTr = L.geoJSON(cTribs, {
+    style: { color: '#93c5fd', weight: 1.8, opacity: .7 }
+  }).addTo(map);
+  bringFront();
+}
+
+function rLanduse() {
+  const huc = tgt.huc;
+  // Fetch JSON sidecar with exact WGS84 bounds from the arcpy export
+  fetch(`data/landuse/${huc}.json`)
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(b => {
+      lLu = L.imageOverlay(
+        `data/landuse/${huc}.png`,
+        [[b.south, b.west], [b.north, b.east]],
+        { opacity: 0.7 }
+      ).addTo(map);
+      bringFront();
+    })
+    .catch(() => {
+      // Fallback: try loading PNG without sidecar using watershed bounds
+      const b = tgt.bounds;
+      const img = new Image();
+      img.onload = () => {
+        const py=(b.north-b.south)*.12/1.24, px=(b.east-b.west)*.12/1.24;
+        lLu = L.imageOverlay(`data/landuse/${huc}.png`,
+          [[b.south+py,b.west+px],[b.north-py,b.east-px]], {opacity:.7}).addTo(map);
+        bringFront();
+      };
+      img.onerror = () => {
+        // Final fallback: topo basemap
+        lLu = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+          {opacity:.35}).addTo(map);
+        bringFront();
+      };
+      img.src = `data/landuse/${huc}.png`;
+    });
+}
+
+function rSatellite() {
+  // Hide landuse so satellite imagery is visible
+  if (lLu) { map.removeLayer(lLu); }
+  lSa = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {opacity:.8}).addTo(map);
+  bringFront();
+  // Show toggle button for landuse
+  $('luToggle').style.display = 'flex';
+}
+
+async function rSurroundings() {
+  // Wait for background loads to finish
+  if (bgLoad) { try { await bgLoad; } catch(e) { console.warn('Background load error:', e); } }
+  // State boundaries
+  if (cStt && cStt.features) {
+    lCo = L.geoJSON(cStt, {
+      style: { color:'#64748b', weight:1.8, fillColor:'transparent', fillOpacity:0, opacity:.5, dashArray:'6,4' }
+    }).addTo(map);
+  }
+  // Surrounding watershed boundaries
+  if (cNbr) {
+    cNbr.forEach(ws => {
+      if (ws.huc === tgt.huc) return;
+      L.geoJSON(ws.geometry, {
+        style: { color:'#f59e0b', weight:1.8, fillColor:'#f59e0b', fillOpacity:.04, opacity:.4 }
+      }).addTo(map);
+      L.marker(ws.bounds.ct, { icon: L.divIcon({ className:'',
+        html: `<div style="color:#fbbf24;font-size:11px;font-family:'DM Mono',monospace;white-space:nowrap;text-align:center;pointer-events:none;text-shadow:0 0 10px rgba(6,11,20,.95),0 0 5px rgba(6,11,20,.85);font-weight:500;opacity:.7">${ws.name}</div>`,
+        iconSize:[180,22], iconAnchor:[90,11] }) }).addTo(map);
+    });
+  }
+  bringFront();
+}
+
+const RENDERS = [null, rMainstem, rTribs, rLanduse, rSatellite, rSurroundings];
+
+/* Build active steps based on data availability */
+function buildSteps() {
+  if (mainSize < 2048 && tribSize < 2048) {
+    steps = [0, 3, 4, 5];
+    console.log('Coastal watershed detected — skipping river layers');
+  } else {
+    steps = [0, 1, 2, 3, 4, 5];
+  }
+  // Show/hide dots and legend items
+  for (let i = 0; i < 6; i++) {
+    $(`d${i}`).style.display = steps.includes(i) ? '' : 'none';
+    $(`l${i}`).style.display = steps.includes(i) ? '' : 'none';
+  }
+}
+
+async function reveal(i) {
+  if (RENDERS[i]) await RENDERS[i]();
+  $(`d${i}`).classList.add('on');
+  $(`l${i}`).classList.add('on');
+  $('dL').textContent = LNAMES[i];
+}
+
+function revealNext() {
+  const pos = steps.indexOf(ly);
+  if (pos >= steps.length - 1) return;
+  ly = steps[pos + 1];
+  reveal(ly);
+}
+
+/* ═══════ FEEDBACK ═══════ */
+function flashMap(type) {
+  const e = $('fl');
+  e.classList.remove('no','ok','fo'); void e.offsetHeight;
+  e.classList.add(type);
+  setTimeout(() => e.classList.add('fo'), 120);
+  setTimeout(() => e.classList.remove(type,'fo'), 700);
+}
+function flashInput(type) {
+  const e = $('gI');
+  e.classList.remove('iw','io'); void e.offsetHeight;
+  e.classList.add(type==='no' ? 'iw' : 'io');
+  if (type==='no') setTimeout(() => e.classList.remove('iw'), 600);
+}
+
+/* ═══════ AUTOCOMPLETE ═══════ */
+function setupAC() {
+  const inp=$('gI'), dd2=$('dd');
+  let hi=-1, filt=[];
+  inp.addEventListener('input', () => {
+    const v = inp.value.trim().toLowerCase();
+    if (v.length < 1) { dd2.classList.remove('open'); return; }
+    filt = all.filter(w => w.name.toLowerCase().includes(v) || w.huc.includes(v)).slice(0,8);
+    if (!filt.length) { dd2.classList.remove('open'); return; }
+    hi = -1;
+    dd2.innerHTML = filt.map((w,i) => {
+      const n=w.name, ix=n.toLowerCase().indexOf(v);
+      const hl = ix>=0 ? n.slice(0,ix)+'<b style="color:var(--ac)">'+n.slice(ix,ix+v.length)+'</b>'+n.slice(ix+v.length) : n;
+      return `<div class="di" data-i="${i}"><span>${hl}</span><span class="dh">${w.huc}</span></div>`;
+    }).join('');
+    dd2.querySelectorAll('.di').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); pkAC(filt[+el.dataset.i]); });
+    });
+    dd2.classList.add('open');
+  });
+  inp.addEventListener('keydown', e => {
+    if (!dd2.classList.contains('open')) { if(e.key==='Enter') guess(); return; }
+    if (e.key==='ArrowDown') { e.preventDefault(); hi=Math.min(hi+1,filt.length-1); uHL(); }
+    else if (e.key==='ArrowUp') { e.preventDefault(); hi=Math.max(hi-1,-1); uHL(); }
+    else if (e.key==='Enter') { e.preventDefault(); hi>=0 ? pkAC(filt[hi]) : guess(); }
+    else if (e.key==='Escape') dd2.classList.remove('open');
+  });
+  inp.addEventListener('blur', () => setTimeout(() => dd2.classList.remove('open'), 150));
+  function uHL() { dd2.querySelectorAll('.di').forEach((el,i) => el.classList.toggle('hl', i===hi)); }
+  function pkAC(w) { inp.value = w.name; dd2.classList.remove('open'); guess(); }
+}
+
+/* ═══════ GUESS ═══════ */
+function guess() {
+  if (done) return;
+  const inp = $('gI'), v = inp.value.trim();
+  if (!v) return;
+  const m = all.find(w => w.name.toLowerCase() === v.toLowerCase());
+  if (!m) { flashInput('no'); return; }
+  if (gs.some(g => g.huc === m.huc)) { inp.value = ''; return; }
+
+  const ok = m.huc === tgt.huc;
+  gs.push({ name:m.name, huc:m.huc, ok });
+
+  flashMap(ok ? 'ok' : 'no');
+  flashInput(ok ? 'ok' : 'no');
+
+  const el = document.createElement('div');
+  el.className = `ge ${ok ? 'go' : 'gn'}`;
+  el.innerHTML = `<span class="gnum">${gs.length}</span><span class="gname">${m.name}</span><span class="gico">${ok ? '✓' : '✗'}</span>`;
+  $('gH').appendChild(el);
+  $('gH').scrollTop = $('gH').scrollHeight;
+  inp.value = '';
+
+  if (ok) endGame(true);
+  else if (steps.indexOf(ly) >= steps.length - 1) endGame(false);
+  else setTimeout(revealNext, 400);
+}
+
+/* ═══════ END GAME ═══════ */
+function endGame(won) {
+  done = true;
+  $('gI').disabled = true;
+  $('gB').disabled = true;
+  const sc = won ? (steps.length - gs.length + 1) : 0;
+
+  setTimeout(() => {
+    $('gA').style.display = 'none';
+    $('rP').classList.add('show');
+    $('rE').textContent = won ? '🎉' : '😬';
+    $('rT').textContent = won
+      ? (gs.length===1 ? 'Incredible! First guess!' : `Got it in ${gs.length}!`)
+      : 'Better luck tomorrow';
+    $('rA').textContent = `${tgt.name} (${tgt.huc})`;
+    $('rS').innerHTML = `Score: <b>${sc}/${steps.length}</b>`;
+
+    const dots = $('rD'); dots.innerHTML = '';
+    for (let i=0; i<steps.length; i++) {
+      const d = document.createElement('div'); d.className = 'rd';
+      if (i < gs.length-1) d.classList.add('w');
+      else if (i === gs.length-1 && won) d.classList.add('c');
+      else d.classList.add('e');
+      dots.appendChild(d);
+    }
+
+    if (lBd) lBd.setStyle({ color: won?'#34d399':'#ef4444', weight:3.5, fillColor: won?'#34d399':'#ef4444', fillOpacity:.06 });
+    if (!won) { let pos = steps.indexOf(ly); while(pos < steps.length - 1) { pos++; ly = steps[pos]; reveal(ly); } }
+    if (!practiceMode) saveResult(sc, gs.length, won);
+
+    // In practice mode, show Next Round instead of Share
+    if (practiceMode) {
+      $('shB').textContent = '➡️ Next Round';
+      $('shB').onclick = nextPracticeRound;
+    } else {
+      $('shB').textContent = '📋 Share result';
+      $('shB').onclick = shareResult;
+    }
+  }, won ? 300 : 600);
+}
+
+/* ═══════ SHARE ═══════ */
+function shareResult() {
+  const res = loadToday();
+  if (!res) return;
+  const mx = res.max || 6;
+  const sq = [];
+  for (let i = 0; i < res.n - 1; i++) sq.push('🟥');
+  if (res.won) sq.push('🟩');
+  while (sq.length < mx) sq.push('⬛');
+  navigator.clipboard.writeText(`🌊 WaterShed ${td()}\n${sq.join('')}  ${res.score}/${mx}`).then(() => {
+    $('shB').textContent = '✓ Copied!'; $('shB').classList.add('cp');
+    setTimeout(() => { $('shB').textContent = '📋 Share result'; $('shB').classList.remove('cp'); }, 2000);
+  });
+}
+$('shB').onclick = shareResult;
+
+/* ═══════ PRACTICE MODE ═══════ */
+async function startPractice() {
+  practiceMode = true;
+  $('sr0').textContent = 'PRACTICE MODE';
+  let idx;
+  do { idx = Math.floor(Math.random() * all.length); } while (all[idx].huc === tgt?.huc && all.length > 1);
+  tgt = { huc: all[idx].huc, name: all[idx].name };
+  await resetBoard();
+}
+
+async function nextPracticeRound() {
+  let idx;
+  do { idx = Math.floor(Math.random() * all.length); } while (all[idx].huc === tgt?.huc && all.length > 1);
+  tgt = { huc: all[idx].huc, name: all[idx].name };
+  await resetBoard();
+}
+
+async function goDaily() {
+  practiceMode = false;
+  $('sr0').textContent = 'DAILY PUZZLE';
+  const picked = all[pick(all.length)];
+  tgt = { huc: picked.huc, name: picked.name };
+  await resetBoard();
+  const existing = loadToday();
+  if (existing) await restoreGame(existing);
+}
+
+/* ═══════ REPLAY ═══════ */
+async function resetBoard() {
+  // Clear map layers
+  if (lBd) { map.removeLayer(lBd); lBd = null; }
+  if (lMs) { map.removeLayer(lMs); lMs = null; }
+  if (lTr) { map.removeLayer(lTr); lTr = null; }
+  if (lLu) { map.removeLayer(lLu); lLu = null; }
+  if (lSa) { map.removeLayer(lSa); lSa = null; }
+  if (lCo) { map.removeLayer(lCo); lCo = null; }
+  map.eachLayer(l => map.removeLayer(l));
+
+  // Reset state
+  ly = 0; gs = []; done = false;
+  cMain = null; cTribs = null; cStt = null; cNbr = null;
+  mainSize = 0; tribSize = 0; bgLoad = null;
+
+  // Reset UI
+  $('gI').disabled = false; $('gI').value = '';
+  $('gB').disabled = false;
+  $('gA').style.display = '';
+  $('rP').classList.remove('show');
+  $('gH').innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    $(`d${i}`).classList.remove('on'); $(`l${i}`).classList.remove('on');
+    $(`d${i}`).style.display = ''; $(`l${i}`).style.display = '';
+  }
+  $('dL').textContent = 'Boundary';
+  steps = [0,1,2,3,4,5];
+  $('luToggle').style.display = 'none';
+  $('luToggle').classList.remove('active');
+  // Reset share button
+  $('shB').textContent = '📋 Share result';
+  $('shB').onclick = shareResult;
+
+  console.log(`${practiceMode ? 'Practice' : 'Daily'}: ${tgt.name} (${tgt.huc})`);
+
+  $('lo').classList.remove('h');
+  $('loT').textContent = 'Loading puzzle...';
+
+  // Load target geometry first
+  try {
+    const geo = await loadTargetGeometry(tgt.huc);
+    tgt.geometry = geo.geometry;
+    tgt.bounds = geo.bounds;
+  } catch(e) { console.error('Failed to load target geometry:', e); }
+
+  rBoundary();
+  reveal(0);
+
+  try {
+    const [ms, tr] = await Promise.all([
+      loadMainstem(tgt.huc).catch(e => { console.warn('Mainstem failed:', e); return {type:'FeatureCollection',features:[]}; }),
+      loadTribs(tgt.huc).catch(e => { console.warn('Tribs failed:', e); return {type:'FeatureCollection',features:[]}; })
+    ]);
+    cMain = ms; cTribs = tr;
+    buildSteps();
+  } catch(e) { console.error('Load error:', e); }
+
+  // Start loading neighbors + states in background
+  bgLoad = Promise.all([
+    loadNearbyWatersheds(tgt.bounds).then(n => { cNbr = n; }).catch(e => { console.warn('Neighbors bg failed:', e); cNbr = []; }),
+    loadStates(tgt.bounds).then(s => { cStt = s; }).catch(e => { console.warn('States bg failed:', e); cStt = {features:[]}; })
+  ]);
+
+  $('lo').classList.add('h');
+  $('gI').focus();
+}
+
+async function replay() {
+  await goDaily();
+}
+
+/* ═══════ STORAGE ═══════ */
+function saveResult(sc,n,w) {
+  const r = JSON.parse(localStorage.getItem('wg6r') || '{}');
+  r[td()] = { score:sc, n, won:w, max:steps.length };
+  localStorage.setItem('wg6r', JSON.stringify(r));
+  updateStreak();
+}
+function loadToday() { return (JSON.parse(localStorage.getItem('wg6r') || '{}'))[td()] || null; }
+function updateStreak() {
+  const r = JSON.parse(localStorage.getItem('wg6r') || '{}');
+  let s=0, d=new Date();
+  while(true) {
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if (r[k]?.won) { s++; d.setDate(d.getDate()-1); } else break;
+  }
+  $('sN').textContent = s;
+}
+
+async function restoreGame(res) {
+  done = true; $('gI').disabled = true; $('gB').disabled = true;
+  $('gA').style.display = 'none';
+  $('rP').classList.add('show');
+  $('rE').textContent = res.won ? '🎉' : '😬';
+  $('rT').textContent = res.won ? `You got it in ${res.n}!` : 'Better luck tomorrow';
+  $('rA').textContent = `${tgt.name} (${tgt.huc})`;
+  const mx = res.max || 6;
+  $('rS').innerHTML = `Score: <b>${res.score}/${mx}</b>`;
+  const dots = $('rD'); dots.innerHTML = '';
+  for (let i=0; i<mx; i++) {
+    const d = document.createElement('div'); d.className = 'rd';
+    if (i < res.n-1) d.classList.add('w');
+    else if (i === res.n-1 && res.won) d.classList.add('c');
+    else d.classList.add('e');
+    dots.appendChild(d);
+  }
+  for (let si=1; si<steps.length; si++) await reveal(steps[si]);
+  ly = steps[steps.length - 1];
+  if (lBd) lBd.setStyle({ color: res.won?'#34d399':'#ef4444', weight:3.5, fillColor: res.won?'#34d399':'#ef4444', fillOpacity:.06 });
+}
+
+/* ═══════ MODAL ═══════ */
+$('hB').onclick = () => $('mbg').classList.add('open');
+$('mC').onclick = () => {
+  $('mbg').classList.remove('open');
+  if ($('htpHide').checked) localStorage.setItem('wg6help', '1');
+};
+$('mbg').onclick = e => { if(e.target===e.currentTarget) e.currentTarget.classList.remove('open') };
+$('gB').onclick = guess;
+$('rpB').onclick = replay;
+$('pmB').onclick = startPractice;
+$('luToggle').onclick = () => {
+  const btn = $('luToggle');
+  if (btn.classList.contains('active')) {
+    btn.classList.remove('active');
+    if (lLu) { map.removeLayer(lLu); bringFront(); }
+  } else {
+    btn.classList.add('active');
+    if (lLu) { lLu.addTo(map); bringFront(); }
+  }
+};
+
+/* ═══════ INIT ═══════ */
+async function init() {
+  initMap();
+  updateStreak();
+
+  try {
+    $('loT').textContent = 'Loading watersheds...';
+    all = await loadWatersheds();
+    if (!all.length) throw new Error('No watersheds returned');
+    console.log(`Loaded ${all.length} HUC-6 basins`);
+
+    tgt = all[pick(all.length)];
+    console.log(`Today: ${tgt.name} (${tgt.huc})`);
+
+    // Load target geometry
+    const geo = await loadTargetGeometry(tgt.huc);
+    tgt.geometry = geo.geometry;
+    tgt.bounds = geo.bounds;
+
+    rBoundary();
+
+    $('loT').textContent = 'Loading layers...';
+    const [ms, tr] = await Promise.all([
+      loadMainstem(tgt.huc).catch(e => { console.warn('Mainstem failed:', e); return {type:'FeatureCollection',features:[]}; }),
+      loadTribs(tgt.huc).catch(e => { console.warn('Tribs failed:', e); return {type:'FeatureCollection',features:[]}; })
+    ]);
+
+    cMain = ms;
+    cTribs = tr;
+    buildSteps();
+    console.log(`Mainstem: ${ms.features?.length || 0} (${mainSize}B), Tribs: ${tr.features?.length || 0} (${tribSize}B)`);
+
+    // Start loading neighbors + states in background
+    bgLoad = Promise.all([
+      loadNearbyWatersheds(tgt.bounds).then(n => { cNbr = n; }).catch(e => { console.warn('Neighbors bg failed:', e); cNbr = []; }),
+      loadStates(tgt.bounds).then(s => { cStt = s; }).catch(e => { console.warn('States bg failed:', e); cStt = {features:[]}; })
+    ]);
+
+    setupAC();
+    $('lo').classList.add('h');
+
+    const existing = loadToday();
+    if (existing) await restoreGame(existing);
+    if (!localStorage.getItem('wg6help')) {
+      $('mbg').classList.add('open');
+    }
+    $('gI').focus();
+
+  } catch(e) {
+    console.error('Init error:', e);
+    $('loT').textContent = 'Failed to load data. Check connection & refresh.';
+    document.querySelector('.sp').style.display = 'none';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
